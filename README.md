@@ -1,33 +1,94 @@
+![](banner.jpg)
+
 # brew-update
 
-Updates Homebrew and all outdated packages.
+A command-line tool for updating Homebrew and all installed packages.
+
+## Purpose
+
+brew-update automates the process of keeping your Homebrew installation current by updating Homebrew itself and then upgrading all outdated formulae and casks.
+
+## Installation
+
+1. Clone or download this repository
+2. Create a virtual environment and install dependencies:
+
+```bash
+cd brew-update
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+3. Optionally, add the `run` script to your PATH or create an alias:
+
+```bash
+alias brew-update='/path/to/brew-update/run'
+```
 
 ## Usage
 
-```bash
-# Update everything
-brew-update update
+### Update all packages
 
-# Dry run (show what would be updated without updating)
-brew-update update --dry-run
+```bash
+./run update
 ```
 
-## What it does
+This will:
+1. Run `brew update` to fetch the latest package definitions
+2. Check for outdated formulae and casks
+3. Upgrade each outdated package
 
-1. Runs `brew update` to fetch latest package definitions
-2. Checks for outdated formulae (`brew outdated --formula --verbose`)
-3. Checks for outdated casks (`brew outdated --cask --verbose`)
-4. Upgrades each outdated package
+### Dry run
+
+Preview what would be updated without making any changes:
+
+```bash
+./run update --dry-run
+```
+
+## Examples
+
+### Perform a full update
+
+```bash
+$ ./run update
+Updating Homebrew...
+Checking for outdated formulae...
+Checking for outdated casks...
+Upgrading node (20.10.0 -> 21.5.0)...
+Upgrading visual-studio-code (1.85.0 -> 1.85.1)...
+Done!
+```
+
+### Check what needs updating
+
+```bash
+$ ./run update --dry-run
+Updating Homebrew...
+Checking for outdated formulae...
+Checking for outdated casks...
+Would upgrade: node (20.10.0 -> 21.5.0)
+Would upgrade: visual-studio-code (1.85.0 -> 1.85.1)
+Dry run complete. No packages were updated.
+```
 
 ## Development
 
+Run tests:
+
 ```bash
-# Run tests
 ./run test src/brew_updater_test.py
+```
 
-# Run linter
+Run linter:
+
+```bash
 ./run lint
+```
 
-# Run full checks
+Run full checks:
+
+```bash
 ./run check
 ```
