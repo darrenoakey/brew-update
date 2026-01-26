@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import site
+import subprocess
+import sys
+from pathlib import Path
+
+# ##################################################################
+# paths relative to this script, not cwd
+SCRIPT_DIR = Path(__file__).parent.resolve()
+SRC_DIR = SCRIPT_DIR / "src"
+OUTPUT_DIR = SCRIPT_DIR / "output"
+TEST_OUT = OUTPUT_DIR / "testing"
+VENV_DIR = SCRIPT_DIR / ".venv"
+
+
+# ##################################################################
+# activate venv
+# activates the virtual environment if present by modifying sys.path
+def activate_venv() -> None:
+    if not VENV_DIR.exists():
+        return
+    if "VIRTUAL_ENV" in os.environ:
+        return
+
+    # Find the site-packages directory
+    venv_lib = VENV_DIR / "lib"
+    if not venv_lib.exists():
+        return
+
+    # Find python version directory (e.g., python3.11)
+    python_dirs = list(venv_lib.glob("python*"))
+    if not python_dirs:
+        return
+
+    site_packages = python_dirs[0] / "site-packages"
+    if not site_packages.exists():
+        return
+
+    # Activate venv by modifying paths
+    os.environ["VIRTUAL_ENV"] = str(VENV_DIR)
+    os.environ["PATH"] = str(VENV_DIR / "bin") + os.pathsep + os.environ.get("PATH", "")
+
+    # Remove user site-packages and add venv site-packages
+    sys.prefix = str(VENV_DIR)
+    sys.exec_prefix = str(VENV_DIR)
+
+    # Add venv site-packages to sys.path
+    prev_length = len(sys.path)
+    site.addsitedir(str(site_packages))
+    # Move new entries to front
+    sys.path[:] = sys.path[prev_length:] + sys.path[:prev_length]
+
+
+activate_venv()
+
+import setproctitle  # noqa: E402
+
+sys.path.insert(0, str(SRC_DIR))
+
+
+# ##################################################################
+# run shell
+# executes a shell command and returns the result
+def run_shell(cmd: list[str], capture: bool = False) -> subprocess.CompletedProcess:
+    if capture:
+        return subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd)
+
+
+# ##################################################################
+# update
+# runs the brew update process
+def command_update(args: argparse.Namespace) -> int:
+    from brew_updater import BrewUpdater
+    updater = BrewUpdater(dry_run=args.dry_run)
+    return updater.run()
+
+
+# ##################################################################
+# test
+# run tests for a specific target
+def command_test(args: argparse.Namespace) -> int:
+    TEST_OUT.mkdir(parents=True, exist_ok=True)
+    target = args.target
+    result = run_shell(["pytest", "-q", str(SCRIPT_DIR / target), "--maxfail=1", "--disable-warnings"])
+    return result.returncode
+
+
+# ##################################################################
+# lint
+# run ruff linter on the source directory
+def command_lint(_: argparse.Namespace) -> int:
+    result = run_shell(["ruff", "check", "--line-length", "120", str(SRC_DIR)])
+    return result.returncode
+
+
+# ##################################################################
+# check
+# run full suite and gates
+def command_check(_: argparse.Namespace) -> int:
+    result = run_shell(["dazpycheck"])
+    return result.returncode
+
+
+# ##################################################################
+# main
+# parse arguments and delegate to the right command
+def main(argv: list[str]) -> int:
+    setproctitle.setproctitle("brew-update")
+
+    parser = argparse.ArgumentParser(description="Homebrew update utility")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_update = sub.add_parser("update", help="Update brew and all outdated packages")
+    p_update.add_argument("--dry-run", action="store_true", help="Show what would be updated without updating")
+    p_update.set_defaults(func=command_update)
+
+    p_test = sub.add_parser("test", help="Run a single test target")
+    p_test.add_argument("target", help="e.g. src/brew_updater_test.py::test_get_outdated")
+    p_test.set_defaults(func=command_test)
+
+    p_lint = sub.add_parser("lint", help="Run linter")
+    p_lint.set_defaults(func=command_lint)
+
+    p_check = sub.add_parser("check", help="Run full suite and gates (dazpycheck)")
+    p_check.set_defaults(func=command_check)
+
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+# ##################################################################
+# standard python pattern for dispatching main
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
